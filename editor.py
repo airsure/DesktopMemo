@@ -28,6 +28,7 @@ class _MemoListWidget(QListWidget):
         if isinstance(editor, EditorWindow):
             editor._do_reorder()
             editor.load_tasks()
+            editor.data_changed.emit()
 
 
 class EditorWindow(QMainWindow):
@@ -38,6 +39,7 @@ class EditorWindow(QMainWindow):
     def __init__(self, store: DataStore):
         super().__init__()
         self._store = store
+        self._active_edit_row: '/_TaskRow | None' = None
         self._init_ui()
         self._apply_theme()
         self.load_tasks()
@@ -232,6 +234,17 @@ class EditorWindow(QMainWindow):
             }}
         """)
 
+    def event(self, event):
+        """窗口失去焦点时自动完成行内编辑."""
+        if event.type() == QEvent.WindowDeactivate:
+            self._finish_active_edit()
+        return super().event(event)
+
+    def _finish_active_edit(self):
+        if self._active_edit_row is not None:
+            self._active_edit_row._finish_edit()
+            self._active_edit_row = None
+
     def closeEvent(self, event):
         """关闭窗口 -> 最小化到托盘."""
         self.hide()
@@ -342,6 +355,9 @@ class _TaskRow(QWidget):
 
         edit.returnPressed.connect(self._finish_edit)
         edit.installEventFilter(self)
+        editor = self.window()
+        if isinstance(editor, EditorWindow):
+            editor._active_edit_row = self
 
     def eventFilter(self, obj, event):
         if hasattr(self, '_editing') and self._editing and obj == self._editing[0]:
@@ -359,13 +375,17 @@ class _TaskRow(QWidget):
             return
         edit_w, orig_label, orig_task, orig_idx = self._editing
         new_text = edit_w.text().strip()
+        saved = False
         if new_text and new_text != orig_task.text:
             self._store.update_task(orig_task.id, text=new_text)
+            saved = True
+        # 先清理编辑状态（layout 仍然有效），再 load_tasks 重建列表
+        self._cleanup_edit()
+        if saved:
             editor = self.window()
             if isinstance(editor, EditorWindow):
                 editor.load_tasks()
                 editor.data_changed.emit()
-        self._cleanup_edit()
 
     def _cancel_edit(self):
         self._cleanup_edit()
@@ -381,3 +401,7 @@ class _TaskRow(QWidget):
         orig_label.show()
         self.layout().insertWidget(orig_idx, orig_label)
         self._editing = None
+        # 解除 EditorWindow 的活跃编辑引用
+        editor = self.window()
+        if isinstance(editor, EditorWindow) and editor._active_edit_row is self:
+            editor._active_edit_row = None
