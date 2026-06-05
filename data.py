@@ -57,6 +57,7 @@ class DataStore:
         self._filepath = filepath
         self._tasks: list[Task] = []
         self._theme: str = "dark"
+        self._screen_index: int = 0
         self._load()
 
     @property
@@ -72,6 +73,15 @@ class DataStore:
         self._theme = value
         self._save()
 
+    @property
+    def screen_index(self) -> int:
+        return self._screen_index
+
+    @screen_index.setter
+    def screen_index(self, value: int):
+        self._screen_index = value
+        self._save()
+
     def _load(self):
         if not os.path.exists(self._filepath):
             self._save()
@@ -79,6 +89,7 @@ class DataStore:
         with open(self._filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
         self._theme = data.get("theme", "dark")
+        self._screen_index = data.get("screen_index", 0)
         self._tasks = [Task.from_dict(t) for t in data.get("tasks", [])]
         self._renumber()
 
@@ -86,6 +97,7 @@ class DataStore:
         data = {
             "version": 1,
             "theme": self._theme,
+            "screen_index": self._screen_index,
             "tasks": [t.to_dict() for t in self._tasks],
         }
         with open(self._filepath, "w", encoding="utf-8") as f:

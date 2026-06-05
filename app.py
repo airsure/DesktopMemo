@@ -58,11 +58,26 @@ class App:
         show_action = menu.addAction("显示编辑")
         show_action.triggered.connect(self._editor.show)
 
+        # 主题子菜单
         theme_menu = menu.addMenu("主题")
         for key in THEMES:
             action = theme_menu.addAction(THEMES[key].name)
             action.triggered.connect(
                 lambda checked, k=key: self._switch_theme(k)
+            )
+
+        # 屏幕选择子菜单
+        screen_menu = menu.addMenu("显示屏幕")
+        screens = QApplication.screens()
+        for i, s in enumerate(screens):
+            name = s.name()
+            # 标记当前选中的屏幕
+            label = f"屏幕 {i + 1}  {name}"
+            if i == self._store.screen_index:
+                label += "  ✓"
+            action = screen_menu.addAction(label)
+            action.triggered.connect(
+                lambda checked, idx=i: self._switch_screen(idx)
             )
 
         menu.addSeparator()
@@ -81,6 +96,12 @@ class App:
         self._editor._apply_theme()
         self._editor.load_tasks()  # 刷新行样式以匹配新主题
         self._overlay.refresh()
+
+    def _switch_screen(self, idx: int):
+        self._store.screen_index = idx
+        self._overlay.refresh()
+        # 重建菜单以更新选中标记
+        self._build_tray_menu()
 
     def _quit(self):
         self._tray.hide()
