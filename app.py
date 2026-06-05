@@ -8,10 +8,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QKeySequence
 
-from data import DataStore, CATEGORIES, CATEGORY_LABELS, DEFAULT_CATEGORY_COLORS
+from data import DataStore, CATEGORY_LABELS, DEFAULT_CATEGORY_COLORS
 from theme import THEMES
 from overlay import OverlayPanel
-from editor import EditorWindow
+from editor import EditorWindow, EDITABLE_CATEGORIES
 
 
 def _create_tray_icon_pixmap():
@@ -110,7 +110,7 @@ class App:
         color_buttons = {}
         colors = dict(self._store.category_colors)
 
-        for cat in CATEGORIES:
+        for cat in EDITABLE_CATEGORIES:
             row = QHBoxLayout()
             label = QLabel(f"  {CATEGORY_LABELS[cat]}")
             label.setFont(QFont("Microsoft YaHei", 12))
@@ -190,7 +190,7 @@ class App:
 
     def _reset_colors(self, dlg, buttons, colors_dict):
         """恢复默认颜色."""
-        for cat in CATEGORIES:
+        for cat in EDITABLE_CATEGORIES:
             colors_dict[cat] = DEFAULT_CATEGORY_COLORS[cat]
 
     def _apply_colors(self, colors: dict, dlg: QDialog):

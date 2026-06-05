@@ -16,13 +16,18 @@ EDITABLE_CATEGORIES = ["now", "fire", "follow", "memo"]
 
 
 class _MemoListWidget(QListWidget):
-    """自定义列表控件：拖拽完成后通过信号通知."""
-    drop_finished = pyqtSignal()
+    """自定义列表控件：拖拽完成后保存排序并重建列表."""
 
     def dropEvent(self, event):
         super().dropEvent(event)
-        # 拖拽完全结束后再通知，避免 widget 关联断裂
-        QTimer.singleShot(0, self.drop_finished.emit)
+        # 延迟重建：确保 Qt 内部拖拽状态完全清理后，重建所有 widget 关联
+        QTimer.singleShot(100, self._after_drop)
+
+    def _after_drop(self):
+        editor = self.window()
+        if isinstance(editor, EditorWindow):
+            editor._do_reorder()
+            editor.load_tasks()
 
 
 class EditorWindow(QMainWindow):
@@ -67,11 +72,10 @@ class EditorWindow(QMainWindow):
         input_layout.addWidget(self._add_btn)
         layout.addLayout(input_layout)
 
-        # 任务列表（使用自定义控件，拖拽完成后才处理排序）
+        # 任务列表（拖拽完成后自动保存排序并重建列表）
         self._list = _MemoListWidget()
         self._list.setDragDropMode(self._list.InternalMove)
         self._list.setDefaultDropAction(Qt.MoveAction)
-        self._list.drop_finished.connect(self._do_reorder)
         self._list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._show_context_menu)
         layout.addWidget(self._list)

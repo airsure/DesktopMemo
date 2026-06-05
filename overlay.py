@@ -1,6 +1,8 @@
 """桌面显示面板：右侧 overlay，鼠标穿透，桌面层级."""
 from __future__ import annotations
 
+import sys
+
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QApplication
 from PyQt5.QtGui import QFont, QFontMetrics
@@ -19,17 +21,16 @@ class OverlayPanel(QWidget):
     def __init__(self, store: DataStore):
         super().__init__()
         self._store = store
+        self._click_through_done = False
         self._init_ui()
         self._apply_theme()
         self.refresh()
 
     def _init_ui(self):
         self.setWindowFlags(
-            Qt.WindowStaysOnBottomHint
-            | Qt.FramelessWindowHint
+            Qt.FramelessWindowHint
             | Qt.Tool
         )
-        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         self._layout = QVBoxLayout(self)
@@ -38,8 +39,47 @@ class OverlayPanel(QWidget):
         self._label = QLabel()
         self._label.setTextFormat(Qt.RichText)
         self._label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self._layout.addWidget(self._label)
+
+    def _ensure_click_through(self):
+        """通过 Windows API 确保窗口完全穿透鼠标点击."""
+        if self._click_through_done or sys.platform != 'win32':
+            return
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            hwnd = int(self.winId())
+
+            # WS_EX_TRANSPARENT: 窗口对鼠标透明
+            # WS_EX_LAYERED: 支持分层窗口（透明背景必须）
+            # WS_EX_NOACTIVATE: 不接收焦点
+            # WS_EX_TOOLWINDOW: 不在任务栏显示
+            GWL_EXSTYLE = -20
+            WS_EX_TRANSPARENT = 0x00000020
+            WS_EX_LAYERED = 0x00080000
+            WS_EX_NOACTIVATE = 0x08000000
+            WS_EX_TOOLWINDOW = 0x00000080
+
+            user32 = ctypes.windll.user32
+            ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            ex_style |= WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW
+            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style)
+
+            # 将窗口置于最底层（HWND_BOTTOM）
+            HWND_BOTTOM = 1
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOACTIVATE = 0x0010
+            user32.SetWindowPos(
+                hwnd, HWND_BOTTOM,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            )
+
+            self._click_through_done = True
+        except Exception:
+            pass
 
     def _measure_text(self):
         """测量最长文本宽度和总行数."""
@@ -47,7 +87,7 @@ class OverlayPanel(QWidget):
         fm = QFontMetrics(font)
         tasks = self._store.get_active_tasks()
 
-        max_width = 40  # 最小宽度
+        max_width = 40
         for task in tasks:
             w = fm.horizontalAdvance(f"●  {task.text}")
             max_width = max(max_width, w)
@@ -63,10 +103,7 @@ class OverlayPanel(QWidget):
 
         max_text_width, line_height, line_count = self._measure_text()
 
-        # 面板宽度 = 文字宽度 + 左右边距，限制在屏幕1/3以内
         panel_width = max(160, min(max_text_width + 48, screen.width() // 3))
-
-        # 面板高度 = 行数 × 行高 + 上下边距，限制在屏幕70%以内
         panel_height = min(line_count * line_height + 36, int(screen.height() * 0.7))
 
         x = screen.right() - panel_width - 10
@@ -113,3 +150,4 @@ class OverlayPanel(QWidget):
     def refresh(self):
         self._apply_theme()
         self._refresh()
+        self._ensure_click_through()
