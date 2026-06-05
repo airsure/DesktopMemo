@@ -278,3 +278,36 @@ class _TaskRow(QWidget):
             padding: 1px 8px;
         """)
         layout.addWidget(cat_label)
+
+        # 双击编辑
+        text_label.setCursor(Qt.IBeamCursor)
+        text_label.mouseDoubleClickEvent = lambda e: self._start_edit(text_label, task)
+
+    def _start_edit(self, label: QLabel, task: Task):
+        theme = get_theme(self._store.theme)
+        edit = QLineEdit(task.text)
+        edit.setStyleSheet(f"""
+            background: {theme.input_bg};
+            color: {theme.input_text};
+            border: 1px solid #0e639c;
+            border-radius: 2px;
+        """)
+        edit.selectAll()
+        # 替换 label
+        idx = self.layout().indexOf(label)
+        self.layout().removeWidget(label)
+        label.hide()
+        self.layout().insertWidget(idx, edit)
+        edit.setFocus()
+
+        def finish_edit():
+            new_text = edit.text().strip()
+            if new_text and new_text != task.text:
+                self._store.update_task(task.id, text=new_text)
+                # 通过信号通知刷新
+                editor = self.window()
+                if isinstance(editor, EditorWindow):
+                    editor.load_tasks()
+                    editor.data_changed.emit()
+
+        edit.returnPressed.connect(finish_edit)
