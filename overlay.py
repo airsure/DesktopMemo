@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QApplication
 from PyQt5.QtGui import QFont
 
-from data import DataStore, CATEGORY_LABELS
+from data import DataStore
 from theme import get_theme, CATEGORY_COLORS
 
 
@@ -60,7 +60,9 @@ class OverlayPanel(QWidget):
             # 无任务时显示提示
             hint = QLabel("暂无进行中的任务")
             hint.setFont(font)
-            hint.setStyleSheet(f"color: {theme.text_primary}; opacity: 0.5;")
+            c = theme.text_primary.lstrip("#")
+            r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+            hint.setStyleSheet(f"color: rgba({r}, {g}, {b}, 0.5);")
             hint.setAlignment(Qt.AlignCenter)
             self._layout.addWidget(hint)
         else:
