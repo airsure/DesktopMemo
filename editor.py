@@ -107,13 +107,12 @@ class EditorWindow(QMainWindow):
         self.data_changed.emit()
 
     def _on_reorder(self, *args):
-        """拖拽排序后重新编号."""
+        """拖拽排序后重新编号（不发射信号，避免干扰拖拽操作）."""
         task_ids = []
         for i in range(self._list.count()):
             item = self._list.item(i)
             task_ids.append(item.data(Qt.UserRole))
         self._store.reorder(task_ids)
-        self.data_changed.emit()
 
     def _show_context_menu(self, pos):
         item = self._list.itemAt(pos)
@@ -159,6 +158,7 @@ class EditorWindow(QMainWindow):
             QMainWindow {{
                 background-color: {theme.editor_bg};
                 color: {theme.editor_text};
+                font-size: 13px;
             }}
             QLineEdit {{
                 background-color: {theme.input_bg};
@@ -166,6 +166,7 @@ class EditorWindow(QMainWindow):
                 border: 1px solid {theme.editor_border};
                 border-radius: 4px;
                 padding: 5px 8px;
+                font-size: 13px;
             }}
             QComboBox {{
                 background-color: {theme.input_bg};
@@ -173,6 +174,7 @@ class EditorWindow(QMainWindow):
                 border: 1px solid {theme.editor_border};
                 border-radius: 4px;
                 padding: 4px 8px;
+                font-size: 13px;
             }}
             QPushButton {{
                 background-color: {theme.accent};
@@ -188,6 +190,7 @@ class EditorWindow(QMainWindow):
             QListWidget {{
                 background-color: transparent;
                 border: none;
+                font-size: 13px;
             }}
         """)
 
@@ -259,10 +262,10 @@ class _TaskRow(QWidget):
             text_label.setStyleSheet(
                 f"color: {theme.editor_text};"
                 "text-decoration: line-through;"
-                "opacity: 0.5;"
+                "font-size: 13px;"
             )
         else:
-            text_label.setStyleSheet(f"color: {theme.editor_text};")
+            text_label.setStyleSheet(f"color: {theme.editor_text}; font-size: 13px;")
         layout.addWidget(text_label, stretch=1)
 
         # 分类标签
@@ -289,6 +292,7 @@ class _TaskRow(QWidget):
             color: {theme.input_text};
             border: 1px solid {theme.accent};
             border-radius: 2px;
+            font-size: 13px;
         """)
         edit.selectAll()
         # 替换 label
