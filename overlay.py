@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QApplication
 from PyQt5.QtGui import QFont, QFontMetrics
 
 from data import DataStore
-from theme import get_theme, CATEGORY_COLORS
+from theme import get_theme
 
 FONT_SIZE = 13
 
@@ -95,7 +95,7 @@ class OverlayPanel(QWidget):
             self._label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             lines = []
             for task in tasks:
-                color = CATEGORY_COLORS.get(task.category, theme.text_primary)
+                color = self._store.category_colors.get(task.category, theme.text_primary)
                 lines.append(f'<span style="color:{color};">●  {task.text}</span>')
             text = "<br>".join(lines)
             self._label.setFont(font)

@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 )
 
 from data import DataStore, Task, CATEGORIES, CATEGORY_LABELS
-from theme import get_theme, CATEGORY_COLORS
+from theme import get_theme
 
 
 class EditorWindow(QMainWindow):
@@ -107,12 +107,25 @@ class EditorWindow(QMainWindow):
         self.data_changed.emit()
 
     def _on_reorder(self, *args):
-        """拖拽排序后重新编号（不发射信号，避免干扰拖拽操作）."""
+        """拖拽排序后用防抖定时器延迟处理，避免干扰拖拽."""
+        from PyQt5.QtCore import QTimer
+        if hasattr(self, '_reorder_timer') and self._reorder_timer is not None:
+            self._reorder_timer.stop()
+        self._reorder_timer = QTimer(self)
+        self._reorder_timer.setSingleShot(True)
+        self._reorder_timer.timeout.connect(self._do_reorder)
+        self._reorder_timer.start(150)
+
+    def _do_reorder(self):
         task_ids = []
         for i in range(self._list.count()):
             item = self._list.item(i)
-            task_ids.append(item.data(Qt.UserRole))
-        self._store.reorder(task_ids)
+            if item:
+                tid = item.data(Qt.UserRole)
+                if tid:
+                    task_ids.append(tid)
+        if task_ids:
+            self._store.reorder(task_ids)
 
     def _show_context_menu(self, pos):
         item = self._list.itemAt(pos)
@@ -242,7 +255,7 @@ class _TaskRow(QWidget):
         layout.setSpacing(8)
 
         theme = get_theme(theme_key)
-        color = CATEGORY_COLORS.get(task.category, theme.text_primary)
+        color = self._store.category_colors.get(task.category, theme.text_primary)
 
         # 拖拽手柄
         handle = QLabel("☰")

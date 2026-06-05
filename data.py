@@ -18,6 +18,14 @@ CATEGORY_LABELS = {
     "memo": "备忘",
 }
 
+DEFAULT_CATEGORY_COLORS = {
+    "now": "#ff4757",
+    "fire": "#ff6348",
+    "follow": "#1e90ff",
+    "done": "#2ed573",
+    "memo": "#ff6b81",
+}
+
 
 @dataclass
 class Task:
@@ -58,6 +66,7 @@ class DataStore:
         self._tasks: list[Task] = []
         self._theme: str = "dark"
         self._screen_index: int = 0
+        self._category_colors: dict = dict(DEFAULT_CATEGORY_COLORS)
         self._load()
 
     @property
@@ -82,6 +91,15 @@ class DataStore:
         self._screen_index = value
         self._save()
 
+    @property
+    def category_colors(self) -> dict:
+        return dict(self._category_colors)
+
+    def set_category_colors(self, colors: dict):
+        """批量设置分类颜色并保存."""
+        self._category_colors = dict(colors)
+        self._save()
+
     def _load(self):
         if not os.path.exists(self._filepath):
             self._save()
@@ -90,6 +108,8 @@ class DataStore:
             data = json.load(f)
         self._theme = data.get("theme", "dark")
         self._screen_index = data.get("screen_index", 0)
+        saved_colors = data.get("category_colors", {})
+        self._category_colors = {**DEFAULT_CATEGORY_COLORS, **saved_colors}
         self._tasks = [Task.from_dict(t) for t in data.get("tasks", [])]
         self._renumber()
 
@@ -98,6 +118,7 @@ class DataStore:
             "version": 1,
             "theme": self._theme,
             "screen_index": self._screen_index,
+            "category_colors": self._category_colors,
             "tasks": [t.to_dict() for t in self._tasks],
         }
         with open(self._filepath, "w", encoding="utf-8") as f:
