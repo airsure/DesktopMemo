@@ -1,7 +1,7 @@
 """编辑主界面：任务列表、拖拽排序、分类管理."""
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QEvent
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QComboBox, QPushButton, QListWidget, QListWidgetItem,
@@ -297,15 +297,51 @@ class _TaskRow(QWidget):
         label.hide()
         self.layout().insertWidget(idx, edit)
         edit.setFocus()
+        self._editing = (edit, label, task, idx)
 
-        def finish_edit():
-            new_text = edit.text().strip()
-            if new_text and new_text != task.text:
-                self._store.update_task(task.id, text=new_text)
-                # 通过信号通知刷新
-                editor = self.window()
-                if isinstance(editor, EditorWindow):
-                    editor.load_tasks()
-                    editor.data_changed.emit()
+        edit.returnPressed.connect(self._finish_edit)
 
-        edit.returnPressed.connect(finish_edit)
+        # Escape 取消编辑
+        edit.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if hasattr(self, '_editing') and self._editing and obj == self._editing[0]:
+            if event.type() == QEvent.KeyPress:
+                if event.key() == Qt.Key_Escape:
+                    self._cancel_edit()
+                    return True
+            elif event.type() == QEvent.FocusOut:
+                # 失焦时自动保存
+                self._finish_edit()
+                return True
+        return super().eventFilter(obj, event)
+
+    def _finish_edit(self):
+        if not hasattr(self, '_editing') or self._editing is None:
+            return
+        edit_w, orig_label, orig_task, orig_idx = self._editing
+        new_text = edit_w.text().strip()
+        if new_text and new_text != orig_task.text:
+            self._store.update_task(orig_task.id, text=new_text)
+            editor = self.window()
+            if isinstance(editor, EditorWindow):
+                editor.load_tasks()
+                editor.data_changed.emit()
+        self._cleanup_edit()
+
+    def _cancel_edit(self):
+        self._cleanup_edit()
+
+    def _cleanup_edit(self):
+        if not hasattr(self, '_editing') or self._editing is None:
+            return
+        edit_w, orig_label, orig_task, orig_idx = self._editing
+        # Remove edit widget
+        idx = self.layout().indexOf(edit_w)
+        if idx >= 0:
+            self.layout().removeWidget(edit_w)
+        edit_w.deleteLater()
+        # Restore original label
+        orig_label.show()
+        self.layout().insertWidget(orig_idx, orig_label)
+        self._editing = None
