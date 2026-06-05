@@ -7,7 +7,6 @@ from PyQt5.QtWidgets import (
     QLineEdit, QComboBox, QPushButton, QListWidget, QListWidgetItem,
     QCheckBox, QLabel, QMenu, QAction, QApplication,
 )
-from PyQt5.QtGui import QFont, QColor, QBrush
 
 from data import DataStore, Task, CATEGORIES, CATEGORY_LABELS
 from theme import get_theme, CATEGORY_COLORS
@@ -107,7 +106,7 @@ class EditorWindow(QMainWindow):
         self.load_tasks()
         self.data_changed.emit()
 
-    def _on_reorder(self):
+    def _on_reorder(self, *args):
         """拖拽排序后重新编号."""
         task_ids = []
         for i in range(self._list.count()):
@@ -176,7 +175,7 @@ class EditorWindow(QMainWindow):
                 padding: 4px 8px;
             }}
             QPushButton {{
-                background-color: #0e639c;
+                background-color: {theme.accent};
                 color: white;
                 border: none;
                 border-radius: 4px;
@@ -184,7 +183,7 @@ class EditorWindow(QMainWindow):
                 font-size: 14px;
             }}
             QPushButton:hover {{
-                background-color: #1177bb;
+                background-color: {theme.accent_hover};
             }}
             QListWidget {{
                 background-color: transparent;
@@ -215,7 +214,6 @@ class _TaskRow(QWidget):
         super().__init__()
         self.task_id = task.id
         self._store = store
-        self.checkbox = None
         self._init_ui(task, store.theme)
 
     def _init_ui(self, task: Task, theme_key: str):
@@ -249,8 +247,8 @@ class _TaskRow(QWidget):
                 background: {theme.input_bg};
             }}
             QCheckBox::indicator:checked {{
-                background: #0e639c;
-                border-color: #0e639c;
+                background: {theme.accent};
+                border-color: {theme.accent};
             }}
         """)
         layout.addWidget(self.checkbox)
@@ -289,7 +287,7 @@ class _TaskRow(QWidget):
         edit.setStyleSheet(f"""
             background: {theme.input_bg};
             color: {theme.input_text};
-            border: 1px solid #0e639c;
+            border: 1px solid {theme.accent};
             border-radius: 2px;
         """)
         edit.selectAll()

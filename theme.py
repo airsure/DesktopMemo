@@ -16,7 +16,8 @@ class Theme:
 
     def __init__(self, name: str, overlay_bg: str, editor_bg: str,
                  editor_text: str, editor_border: str, row_hover: str,
-                 input_bg: str, input_text: str, text_primary: str):
+                 input_bg: str, input_text: str, text_primary: str,
+                 accent: str, accent_hover: str):
         self.name = name
         self.overlay_bg = overlay_bg
         self.editor_bg = editor_bg
@@ -26,6 +27,8 @@ class Theme:
         self.input_bg = input_bg
         self.input_text = input_text
         self.text_primary = text_primary
+        self.accent = accent
+        self.accent_hover = accent_hover
 
 
 THEMES = {
@@ -39,6 +42,8 @@ THEMES = {
         input_bg="#444444",
         input_text="#ffffff",
         text_primary="#dddddd",
+        accent="#0e639c",
+        accent_hover="#1177bb",
     ),
     "light": Theme(
         name="明亮",
@@ -50,6 +55,8 @@ THEMES = {
         input_bg="#ffffff",
         input_text="#333333",
         text_primary="#333333",
+        accent="#0e639c",
+        accent_hover="#1177bb",
     ),
     "glass": Theme(
         name="毛玻璃",
@@ -61,6 +68,8 @@ THEMES = {
         input_bg="rgba(255, 255, 255, 0.10)",
         input_text="#ffffff",
         text_primary="#ffffff",
+        accent="#0e639c",
+        accent_hover="#1177bb",
     ),
 }
 
