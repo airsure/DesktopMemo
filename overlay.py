@@ -38,6 +38,7 @@ class OverlayPanel(QWidget):
         self._label = QLabel()
         self._label.setTextFormat(Qt.RichText)
         self._label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self._layout.addWidget(self._label)
 
     def _measure_text(self):

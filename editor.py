@@ -1,7 +1,7 @@
 """编辑主界面：任务列表、拖拽排序、分类管理."""
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt, pyqtSignal, QEvent
+from PyQt5.QtCore import Qt, pyqtSignal, QEvent, QTimer
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QComboBox, QPushButton, QListWidget, QListWidgetItem,
@@ -10,6 +10,19 @@ from PyQt5.QtWidgets import (
 
 from data import DataStore, Task, CATEGORIES, CATEGORY_LABELS
 from theme import get_theme
+
+# 编辑界面可选的分类（排除"已完成"，用复选框代替）
+EDITABLE_CATEGORIES = ["now", "fire", "follow", "memo"]
+
+
+class _MemoListWidget(QListWidget):
+    """自定义列表控件：拖拽完成后通过信号通知."""
+    drop_finished = pyqtSignal()
+
+    def dropEvent(self, event):
+        super().dropEvent(event)
+        # 拖拽完全结束后再通知，避免 widget 关联断裂
+        QTimer.singleShot(0, self.drop_finished.emit)
 
 
 class EditorWindow(QMainWindow):
@@ -42,7 +55,7 @@ class EditorWindow(QMainWindow):
         self._input.returnPressed.connect(self._add_task)
 
         self._category_combo = QComboBox()
-        for cat in CATEGORIES:
+        for cat in EDITABLE_CATEGORIES:
             self._category_combo.addItem(CATEGORY_LABELS[cat], cat)
 
         self._add_btn = QPushButton("+")
@@ -54,11 +67,11 @@ class EditorWindow(QMainWindow):
         input_layout.addWidget(self._add_btn)
         layout.addLayout(input_layout)
 
-        # 任务列表
-        self._list = QListWidget()
+        # 任务列表（使用自定义控件，拖拽完成后才处理排序）
+        self._list = _MemoListWidget()
         self._list.setDragDropMode(self._list.InternalMove)
         self._list.setDefaultDropAction(Qt.MoveAction)
-        self._list.model().rowsMoved.connect(self._on_reorder)
+        self._list.drop_finished.connect(self._do_reorder)
         self._list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._show_context_menu)
         layout.addWidget(self._list)
@@ -106,17 +119,8 @@ class EditorWindow(QMainWindow):
         self.load_tasks()
         self.data_changed.emit()
 
-    def _on_reorder(self, *args):
-        """拖拽排序后用防抖定时器延迟处理，避免干扰拖拽."""
-        from PyQt5.QtCore import QTimer
-        if hasattr(self, '_reorder_timer') and self._reorder_timer is not None:
-            self._reorder_timer.stop()
-        self._reorder_timer = QTimer(self)
-        self._reorder_timer.setSingleShot(True)
-        self._reorder_timer.timeout.connect(self._do_reorder)
-        self._reorder_timer.start(150)
-
     def _do_reorder(self):
+        """拖拽完成后保存新的排序."""
         task_ids = []
         for i in range(self._list.count()):
             item = self._list.item(i)
@@ -138,9 +142,9 @@ class EditorWindow(QMainWindow):
 
         menu = QMenu(self)
 
-        # 切换分类子菜单
+        # 切换分类子菜单（排除当前分类和"已完成"）
         cat_menu = menu.addMenu("切换分类")
-        for cat in CATEGORIES:
+        for cat in EDITABLE_CATEGORIES:
             if cat != task.category:
                 action = cat_menu.addAction(CATEGORY_LABELS[cat])
                 action.triggered.connect(
@@ -325,7 +329,6 @@ class _TaskRow(QWidget):
             font-size: 13px;
         """)
         edit.selectAll()
-        # 替换 label
         idx = self.layout().indexOf(label)
         self.layout().removeWidget(label)
         label.hide()
@@ -334,8 +337,6 @@ class _TaskRow(QWidget):
         self._editing = (edit, label, task, idx)
 
         edit.returnPressed.connect(self._finish_edit)
-
-        # Escape 取消编辑
         edit.installEventFilter(self)
 
     def eventFilter(self, obj, event):
@@ -345,7 +346,6 @@ class _TaskRow(QWidget):
                     self._cancel_edit()
                     return True
             elif event.type() == QEvent.FocusOut:
-                # 失焦时自动保存
                 self._finish_edit()
                 return True
         return super().eventFilter(obj, event)
@@ -370,12 +370,10 @@ class _TaskRow(QWidget):
         if not hasattr(self, '_editing') or self._editing is None:
             return
         edit_w, orig_label, orig_task, orig_idx = self._editing
-        # Remove edit widget
         idx = self.layout().indexOf(edit_w)
         if idx >= 0:
             self.layout().removeWidget(edit_w)
         edit_w.deleteLater()
-        # Restore original label
         orig_label.show()
         self.layout().insertWidget(orig_idx, orig_label)
         self._editing = None
