@@ -176,6 +176,23 @@ class EditorWindow(QMainWindow):
                 padding: 4px 8px;
                 font-size: 13px;
             }}
+            QComboBox:hover {{
+                border-color: {theme.accent};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                padding-right: 6px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {theme.editor_bg};
+                color: {theme.editor_text};
+                border: 1px solid {theme.editor_border};
+                border-radius: 4px;
+                selection-background-color: {theme.accent};
+                selection-color: white;
+                padding: 4px;
+                font-size: 13px;
+            }}
             QPushButton {{
                 background-color: {theme.accent};
                 color: white;
@@ -272,7 +289,7 @@ class _TaskRow(QWidget):
         cat_label = QLabel(CATEGORY_LABELS.get(task.category, ""))
         cat_label.setStyleSheet(f"""
             color: {color};
-            font-size: 10px;
+            font-size: 12px;
             background: transparent;
             border: 1px solid {color};
             border-radius: 8px;

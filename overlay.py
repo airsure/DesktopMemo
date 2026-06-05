@@ -1,4 +1,4 @@
-"""桌面显示面板：右侧 overlay，鼠标穿透，置顶."""
+"""桌面显示面板：右侧 overlay，鼠标穿透，桌面层级."""
 from __future__ import annotations
 
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -25,7 +25,7 @@ class OverlayPanel(QWidget):
 
     def _init_ui(self):
         self.setWindowFlags(
-            Qt.WindowStaysOnTopHint
+            Qt.WindowStaysOnBottomHint
             | Qt.FramelessWindowHint
             | Qt.Tool
         )
@@ -106,7 +106,7 @@ class OverlayPanel(QWidget):
     def _apply_theme(self):
         theme = get_theme(self._store.theme)
         self.setStyleSheet(
-            f"QWidget {{ background: {theme.overlay_bg}; border-radius: 12px; }}"
+            f"background: {theme.overlay_bg}; border-radius: 12px;"
         )
 
     def refresh(self):
