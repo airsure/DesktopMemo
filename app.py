@@ -1,16 +1,12 @@
 """应用主控：托盘图标、窗口管理、快捷键."""
 from __future__ import annotations
 
-import sys
-import os
-
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction, QShortcut
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QKeySequence
-from PyQt5.QtWidgets import QShortcut
 
 from data import DataStore
-from theme import THEMES, get_theme
+from theme import THEMES
 from overlay import OverlayPanel
 from editor import EditorWindow
 
@@ -52,8 +48,8 @@ class App:
         # 默认显示 overlay，隐藏编辑器
         self._overlay.show()
 
-        # 注册全局快捷键 Ctrl+Alt+Q 退出
-        self._hotkey = QShortcut(QKeySequence("Ctrl+Alt+Q"), self._editor)
+        # 注册全局快捷键 Ctrl+Alt+Q 退出（parent=None 确保全局生效）
+        self._hotkey = QShortcut(QKeySequence("Ctrl+Alt+Q"), None)
         self._hotkey.activated.connect(self._quit)
 
     def _build_tray_menu(self):
@@ -83,7 +79,7 @@ class App:
     def _switch_theme(self, key: str):
         self._store.theme = key
         self._editor._apply_theme()
-        self._editor.load_tasks()
+        self._editor.load_tasks()  # 刷新行样式以匹配新主题
         self._overlay.refresh()
 
     def _quit(self):
