@@ -1,18 +1,42 @@
 """编辑主界面：任务列表、拖拽排序、分类管理."""
 from __future__ import annotations
 
+import os
+
 from PyQt5.QtCore import Qt, pyqtSignal, QEvent, QTimer
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QComboBox, QPushButton, QListWidget, QListWidgetItem,
     QCheckBox, QLabel, QMenu, QAction, QApplication,
 )
+from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QFont as QFontGui
 
 from data import DataStore, Task, CATEGORIES, CATEGORY_LABELS
 from theme import get_theme
 
 # 编辑界面可选的分类（排除"已完成"，用复选框代替）
 EDITABLE_CATEGORIES = ["now", "fire", "follow", "memo"]
+# 应用图标路径
+ICON_PATH = r"\\192.168.2.9\技术中心\技术部\参数化&智能化\2.智能化\0.ICO\Memo.ico"
+
+
+def _load_app_icon() -> QIcon:
+    """加载应用图标，网络路径不可用时生成备用图标."""
+    if os.path.exists(ICON_PATH):
+        return QIcon(ICON_PATH)
+    # 备用：生成红底白字"备"图标
+    pix = QPixmap(64, 64)
+    pix.fill(Qt.transparent)
+    painter = QPainter(pix)
+    painter.setBrush(QColor(255, 71, 87))
+    painter.setPen(Qt.NoPen)
+    painter.drawRoundedRect(0, 0, 64, 64, 12, 12)
+    painter.setPen(QColor(255, 255, 255))
+    font = QFontGui("Microsoft YaHei", 36, QFontGui.Bold)
+    painter.setFont(font)
+    painter.drawText(pix.rect(), Qt.AlignCenter, "备")
+    painter.end()
+    return QIcon(pix)
 
 
 class _MemoListWidget(QListWidget):
@@ -48,6 +72,9 @@ class EditorWindow(QMainWindow):
         self.setWindowTitle("工作备忘录")
         self.resize(420, 560)
         self.setMinimumSize(340, 400)
+
+        # 设置窗口图标
+        self.setWindowIcon(_load_app_icon())
 
         central = QWidget()
         self.setCentralWidget(central)

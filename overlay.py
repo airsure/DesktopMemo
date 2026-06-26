@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sys
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QApplication
 from PyQt5.QtGui import QFont, QFontMetrics
 
@@ -11,6 +11,7 @@ from data import DataStore
 from theme import get_theme
 
 FONT_SIZE = 13
+TOPMOST_INTERVAL = 5 * 60 * 1000  # 每5分钟置顶一次
 
 
 class OverlayPanel(QWidget):
@@ -24,6 +25,27 @@ class OverlayPanel(QWidget):
         self._click_through_done = False
         self._init_ui()
         self._apply_theme()
+        self.refresh()
+
+        # 监听屏幕增减，自动重新定位
+        app = QApplication.instance()
+        if app:
+            app.screenAdded.connect(self._on_screen_changed)
+            app.screenRemoved.connect(self._on_screen_changed)
+
+        # 每5分钟将 overlay 提升到最上层
+        self._topmost_timer = QTimer(self)
+        self._topmost_timer.timeout.connect(self._bring_to_front)
+        self._topmost_timer.start(TOPMOST_INTERVAL)
+        # 初始也执行一次，确保启动时在顶层
+        QTimer.singleShot(500, self._bring_to_front)
+
+    def _on_screen_changed(self, screen):
+        """屏幕增减时刷新 overlay 位置."""
+        screens = QApplication.screens()
+        # 如果当前选择的屏幕已不可用，自动切到屏幕0
+        if self._store.screen_index >= len(screens):
+            self._store.screen_index = 0
         self.refresh()
 
     def _init_ui(self):
@@ -66,18 +88,55 @@ class OverlayPanel(QWidget):
             ex_style |= WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW
             user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style)
 
-            # 将窗口置于最底层（HWND_BOTTOM）
-            HWND_BOTTOM = 1
+            self._click_through_done = True
+        except Exception:
+            pass
+
+    def _bring_to_front(self):
+        """将 overlay 临时置顶后恢复到正常层级顶部。
+
+        效果：overlay 显示在所有非 TOPMOST 窗口之上，
+        用户点击其他窗口后该窗口可正常覆盖 overlay，
+        每5分钟自动重新提升。
+        """
+        if sys.platform != 'win32':
+            return
+        try:
+            import ctypes
+            hwnd = int(self.winId())
+            if hwnd == 0:
+                return  # 窗口句柄尚未创建
+            user32 = ctypes.windll.user32
             SWP_NOMOVE = 0x0002
             SWP_NOSIZE = 0x0001
             SWP_NOACTIVATE = 0x0010
+            HWND_TOPMOST = -1
+            HWND_NOTOPMOST = -2
+            # 置顶
             user32.SetWindowPos(
-                hwnd, HWND_BOTTOM,
+                hwnd, HWND_TOPMOST,
                 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
             )
+            # 延迟100ms后恢复到非置顶层级的顶部，确保 Windows 完成 Z-order 排序
+            QTimer.singleShot(100, lambda: self._drop_from_topmost(hwnd))
+        except Exception:
+            pass
 
-            self._click_through_done = True
+    def _drop_from_topmost(self, hwnd: int):
+        """从置顶降回正常层级顶部."""
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOACTIVATE = 0x0010
+            HWND_NOTOPMOST = -2
+            user32.SetWindowPos(
+                hwnd, HWND_NOTOPMOST,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            )
         except Exception:
             pass
 
