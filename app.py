@@ -215,6 +215,7 @@ class App:
     def _switch_screen(self, idx: int):
         self._store.screen_index = idx
         self._overlay.refresh()
+        self._overlay.set_preferred_screen()  # 更新用户的首选屏幕
         self._build_tray_menu()
 
     def _quit(self):
