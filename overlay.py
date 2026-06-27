@@ -11,7 +11,10 @@ from data import DataStore
 from theme import get_theme
 
 FONT_SIZE = 13
-TOPMOST_INTERVAL = 5 * 60 * 1000  # 每5分钟置顶一次
+# 定时器间隔（毫秒）
+TOPMOST_INTERVAL = 5 * 60 * 1000      # 每5分钟提升 Z-order
+SCREEN_CHECK_INTERVAL = 3 * 1000       # 每3秒检查屏幕是否恢复
+TOPMOST_DROP_DELAY = 500               # TOPMOST→NOTOPMOST 延迟（毫秒）
 
 
 class OverlayPanel(QWidget):
@@ -23,30 +26,130 @@ class OverlayPanel(QWidget):
         super().__init__()
         self._store = store
         self._click_through_done = False
+        self._preferred_screen_name: str = ""
         self._init_ui()
         self._apply_theme()
         self.refresh()
 
-        # 监听屏幕增减，自动重新定位
+        # 监听屏幕增减信号（物理连接/断开）
         app = QApplication.instance()
         if app:
             app.screenAdded.connect(self._on_screen_changed)
             app.screenRemoved.connect(self._on_screen_changed)
 
-        # 每5分钟将 overlay 提升到最上层
+        # 定期轮询：检测信号未覆盖的屏幕变化（如显示器开关机）
+        self._screen_check_timer = QTimer(self)
+        self._screen_check_timer.timeout.connect(self._check_screen_availability)
+        self._screen_check_timer.start(SCREEN_CHECK_INTERVAL)
+
+        # 每5分钟将 overlay 提升到 Z-order 顶部
         self._topmost_timer = QTimer(self)
         self._topmost_timer.timeout.connect(self._bring_to_front)
         self._topmost_timer.start(TOPMOST_INTERVAL)
-        # 初始也执行一次，确保启动时在顶层
-        QTimer.singleShot(500, self._bring_to_front)
+        # 启动 1 秒后首次执行（等窗口完全就绪）
+        QTimer.singleShot(1000, self._bring_to_front)
+
+    # ─── 屏幕切换 ────────────────────────────────────────────
 
     def _on_screen_changed(self, screen):
-        """屏幕增减时刷新 overlay 位置."""
+        """屏幕增减信号处理：尝试恢复到用户选择的屏幕."""
+        self._restore_preferred_screen()
+
+    def _check_screen_availability(self):
+        """定期轮询：检测屏幕是否恢复（处理信号遗漏的情况）."""
         screens = QApplication.screens()
-        # 如果当前选择的屏幕已不可用，自动切到屏幕0
+        # 检查当前屏幕索引是否有效
+        if self._store.screen_index >= len(screens):
+            self._restore_preferred_screen()
+            return
+        # 检查是否在首选屏幕上，不在则尝试恢复
+        current_name = screens[self._store.screen_index].name()
+        if self._preferred_screen_name and current_name != self._preferred_screen_name:
+            self._restore_preferred_screen()
+
+    def _restore_preferred_screen(self):
+        """尝试根据屏幕名称找回用户选择的屏幕，失败则回退到索引0."""
+        screens = QApplication.screens()
+        if not screens:
+            return
+        # 优先按名称匹配
+        if self._preferred_screen_name:
+            for i, s in enumerate(screens):
+                if s.name() == self._preferred_screen_name:
+                    if self._store.screen_index != i:
+                        self._store.screen_index = i
+                        self.refresh()
+                    return
+        # 回退：索引越界时重置为 0
         if self._store.screen_index >= len(screens):
             self._store.screen_index = 0
-        self.refresh()
+            self.refresh()
+
+    # ─── Z-order 管理 ────────────────────────────────────────
+
+    def _bring_to_front(self):
+        """将 overlay 提升到 Z-order 顶部。
+
+        策略：先设为 TOPMOST 强制突破所有 Z-order 限制，
+        500ms 后降回 NOTOPMOST（保持在非置顶窗口最上层）。
+        这样用户点击其他窗口时该窗口可以正常覆盖 overlay。
+        """
+        if sys.platform != 'win32':
+            return
+        hwnd = self._get_valid_hwnd()
+        if hwnd is None:
+            return
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            SW_SHOWNOACTIVATE = 4
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOACTIVATE = 0x0010
+            HWND_TOPMOST = -1
+
+            # 确保窗口可见（对 tool window 很重要）
+            user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE)
+
+            # 设为 TOPMOST
+            user32.SetWindowPos(
+                hwnd, HWND_TOPMOST,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            )
+            # 延迟后降回非置顶（保持 Z-order 顶部位置）
+            QTimer.singleShot(TOPMOST_DROP_DELAY, lambda: self._drop_from_topmost(hwnd))
+        except Exception:
+            pass
+
+    def _drop_from_topmost(self, hwnd: int):
+        """从 TOPMOST 降回非置顶层级的顶部."""
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOACTIVATE = 0x0010
+            HWND_NOTOPMOST = -2
+            user32.SetWindowPos(
+                hwnd, HWND_NOTOPMOST,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            )
+        except Exception:
+            pass
+
+    def _get_valid_hwnd(self):
+        """获取有效的原生窗口句柄，失败返回 None."""
+        try:
+            hwnd = int(self.winId())
+            if hwnd == 0:
+                return None
+            return hwnd
+        except Exception:
+            return None
+
+    # ─── UI 初始化 ────────────────────────────────────────────
 
     def _init_ui(self):
         self.setWindowFlags(
@@ -69,14 +172,9 @@ class OverlayPanel(QWidget):
             return
         try:
             import ctypes
-            from ctypes import wintypes
 
             hwnd = int(self.winId())
 
-            # WS_EX_TRANSPARENT: 窗口对鼠标透明
-            # WS_EX_LAYERED: 支持分层窗口（透明背景必须）
-            # WS_EX_NOACTIVATE: 不接收焦点
-            # WS_EX_TOOLWINDOW: 不在任务栏显示
             GWL_EXSTYLE = -20
             WS_EX_TRANSPARENT = 0x00000020
             WS_EX_LAYERED = 0x00080000
@@ -92,53 +190,7 @@ class OverlayPanel(QWidget):
         except Exception:
             pass
 
-    def _bring_to_front(self):
-        """将 overlay 临时置顶后恢复到正常层级顶部。
-
-        效果：overlay 显示在所有非 TOPMOST 窗口之上，
-        用户点击其他窗口后该窗口可正常覆盖 overlay，
-        每5分钟自动重新提升。
-        """
-        if sys.platform != 'win32':
-            return
-        try:
-            import ctypes
-            hwnd = int(self.winId())
-            if hwnd == 0:
-                return  # 窗口句柄尚未创建
-            user32 = ctypes.windll.user32
-            SWP_NOMOVE = 0x0002
-            SWP_NOSIZE = 0x0001
-            SWP_NOACTIVATE = 0x0010
-            HWND_TOPMOST = -1
-            HWND_NOTOPMOST = -2
-            # 置顶
-            user32.SetWindowPos(
-                hwnd, HWND_TOPMOST,
-                0, 0, 0, 0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-            )
-            # 延迟100ms后恢复到非置顶层级的顶部，确保 Windows 完成 Z-order 排序
-            QTimer.singleShot(100, lambda: self._drop_from_topmost(hwnd))
-        except Exception:
-            pass
-
-    def _drop_from_topmost(self, hwnd: int):
-        """从置顶降回正常层级顶部."""
-        try:
-            import ctypes
-            user32 = ctypes.windll.user32
-            SWP_NOMOVE = 0x0002
-            SWP_NOSIZE = 0x0001
-            SWP_NOACTIVATE = 0x0010
-            HWND_NOTOPMOST = -2
-            user32.SetWindowPos(
-                hwnd, HWND_NOTOPMOST,
-                0, 0, 0, 0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-            )
-        except Exception:
-            pass
+    # ─── 布局与渲染 ──────────────────────────────────────────
 
     def _measure_text(self):
         """测量最长文本宽度和总行数."""
@@ -159,6 +211,9 @@ class OverlayPanel(QWidget):
         screens = QApplication.screens()
         idx = max(0, min(self._store.screen_index, len(screens) - 1))
         screen = screens[idx].availableGeometry()
+
+        # 记住当前屏幕名称，用于屏幕热插拔时自动恢复
+        self._preferred_screen_name = screens[idx].name()
 
         max_text_width, line_height, line_count = self._measure_text()
 
